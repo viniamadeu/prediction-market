@@ -16,6 +16,7 @@ import { buildMarketTargets } from '@/app/[locale]/(platform)/event/[slug]/_hook
 import { useColumns } from '@/hooks/useColumns'
 import { useCurrentTimestamp } from '@/hooks/useCurrentTimestamp'
 import { resolveDisplayPrice } from '@/lib/market-chance'
+import { isSportsAuxiliaryEventSlug } from '@/lib/sports-event-slugs'
 import { cn } from '@/lib/utils'
 import { useUser } from '@/stores/useUser'
 
@@ -29,8 +30,6 @@ interface EventsGridProps {
 }
 
 const EMPTY_EVENTS: Event[] = []
-const MORE_MARKETS_SUFFIX_REGEX = /-more-markets(?:-\d+)?$/i
-
 function normalizeSeriesSlug(value: string | null | undefined) {
   const normalized = value?.trim().toLowerCase()
   return normalized || null
@@ -75,8 +74,13 @@ function isResolvedLike(event: Event) {
   return event.markets.every(market => market.is_resolved)
 }
 
+function isOverdueUnresolved(event: Event, nowMs: number) {
+  const endTimestamp = toTimestamp(event.end_date)
+  return !isResolvedLike(event) && Number.isFinite(endTimestamp) && endTimestamp < nowMs
+}
+
 function isMoreMarketsEvent(event: Event) {
-  return MORE_MARKETS_SUFFIX_REGEX.test(event.slug)
+  return isSportsAuxiliaryEventSlug(event.slug)
 }
 
 function isPreferredSeriesEvent(candidate: Event, current: Event, nowMs: number) {
@@ -86,6 +90,20 @@ function isPreferredSeriesEvent(candidate: Event, current: Event, nowMs: number)
   const currentHasFutureEnd = currentEnd >= nowMs
   const candidateResolved = isResolvedLike(candidate)
   const currentResolved = isResolvedLike(current)
+  const candidateOverdueUnresolved = isOverdueUnresolved(candidate, nowMs)
+  const currentOverdueUnresolved = isOverdueUnresolved(current, nowMs)
+
+  if (candidateOverdueUnresolved || currentOverdueUnresolved) {
+    if (candidateOverdueUnresolved !== currentOverdueUnresolved) {
+      return candidateOverdueUnresolved
+    }
+
+    if (candidateEnd !== currentEnd) {
+      return candidateEnd > currentEnd
+    }
+
+    return isMoreRecentEvent(candidate, current)
+  }
 
   if (candidateHasFutureEnd && currentHasFutureEnd) {
     if (candidateResolved !== currentResolved) {

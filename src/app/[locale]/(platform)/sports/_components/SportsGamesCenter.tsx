@@ -114,6 +114,7 @@ const SPORTS_EVENT_ODDS_FORMAT_STORAGE_KEY = 'sports:event:odds-format'
 const SPORTS_GAMES_SHOW_SPREADS_TOTALS_STORAGE_KEY = 'sports:games:show-spreads-totals'
 const LIVE_SOON_WINDOW_MS = 24 * 60 * 60 * 1000
 const LIVE_FALLBACK_LIMIT = 10
+const SPORTS_LIVE_FALLBACK_WINDOW_MS = 2 * 60 * 60 * 1000
 const HERO_LEGEND_LABEL_GAP_PX = 8
 const HERO_LEGEND_RIGHT_INSET_PX = 4
 const HERO_LEGEND_MIN_WIDTH_PX = 72
@@ -763,6 +764,20 @@ function resolveCardEndTimestamp(card: SportsGamesCard) {
   return Number.NaN
 }
 
+function resolveCardLiveFallbackEndTimestamp(card: SportsGamesCard) {
+  const startMs = resolveCardStartTimestamp(card)
+  if (!Number.isFinite(startMs)) {
+    return Number.NaN
+  }
+
+  const endMs = resolveCardEndTimestamp(card)
+  const referenceEndMs = Number.isFinite(endMs) && endMs > startMs
+    ? endMs
+    : startMs
+
+  return referenceEndMs + SPORTS_LIVE_FALLBACK_WINDOW_MS
+}
+
 function parseSportsScore(value: string | null | undefined) {
   const trimmed = value?.trim()
   if (!trimmed) {
@@ -793,12 +808,16 @@ function isCardLiveNow(card: SportsGamesCard, nowMs: number) {
   const isInTimeWindow = Number.isFinite(startMs) && Number.isFinite(endMs)
     ? startMs <= nowMs && nowMs <= endMs
     : false
+  const liveFallbackEndMs = resolveCardLiveFallbackEndTimestamp(card)
+  const isWithinFallbackWindow = Number.isFinite(startMs) && Number.isFinite(liveFallbackEndMs)
+    ? startMs <= nowMs && nowMs <= liveFallbackEndMs
+    : false
 
   if (card.event.sports_live === true) {
     return true
   }
 
-  return isInTimeWindow
+  return isInTimeWindow || isWithinFallbackWindow
 }
 
 function isCardFuture(card: SportsGamesCard, nowMs: number) {
@@ -1764,12 +1783,20 @@ function abbreviatePositionMarketLabel(label: string, teams: SportsGamesCard['te
 function resolveTradeHeaderTitle({
   card,
   selectedButton,
+  selectedMarket,
   marketType,
 }: {
   card: SportsGamesCard
   selectedButton: SportsGamesButton
+  selectedMarket: Market | null
   marketType: SportsGamesMarketType
 }) {
+  const normalizedMarketType = normalizeComparableText(selectedMarket?.sports_market_type)
+  if (normalizedMarketType.includes('exact score')) {
+    const descriptor = resolveMarketDescriptor(selectedMarket)
+    return descriptor ? `Exact Score: ${descriptor}` : 'Exact Score'
+  }
+
   if (marketType === 'btts') {
     return 'Both Teams to Score?'
   }
@@ -2024,27 +2051,40 @@ export function SportsOrderPanelMarketInfo({
   selectedOutcome: Outcome | null
   marketType: SportsGamesMarketType
 }) {
+  const selectedMarket = resolveSelectedMarket(card, selectedButton.key)
   const badgeLabel = resolveSelectedTradeLabel(selectedButton, selectedOutcome)
   const headerTitle = resolveTradeHeaderTitle({
     card,
     selectedButton,
+    selectedMarket,
     marketType,
   })
   const badgeAccent = resolveTradeHeaderBadgeAccent(selectedButton)
-  const marketIcon = marketType === 'total'
-    ? <TotalBadge button={selectedButton} />
-    : marketType === 'btts'
-      ? <BttsBadge button={selectedButton} />
-      : selectedButton.tone === 'draw'
-        ? <DrawBadge />
-        : <TeamLogoBadge card={card} button={selectedButton} />
+  const isExactScoreTrade = normalizeComparableText(selectedMarket?.sports_market_type).includes('exact score')
+  let marketIcon: React.ReactNode = null
+  if (!isExactScoreTrade) {
+    if (marketType === 'total') {
+      marketIcon = <TotalBadge button={selectedButton} />
+    }
+    else if (marketType === 'btts') {
+      marketIcon = <BttsBadge button={selectedButton} />
+    }
+    else if (selectedButton.tone === 'draw') {
+      marketIcon = <DrawBadge />
+    }
+    else {
+      marketIcon = <TeamLogoBadge card={card} button={selectedButton} />
+    }
+  }
 
   return (
     <div className="mb-4">
-      <div className="flex items-start gap-3">
-        <div className="shrink-0">
-          {marketIcon}
-        </div>
+      <div className={cn('flex items-start', marketIcon && 'gap-3')}>
+        {marketIcon && (
+          <div className="shrink-0">
+            {marketIcon}
+          </div>
+        )}
 
         <div className="min-w-0">
           <p className="line-clamp-2 text-base/tight font-bold text-foreground">
