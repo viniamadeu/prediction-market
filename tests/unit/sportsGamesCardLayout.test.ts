@@ -1,7 +1,9 @@
 import {
   hasSportsGamesCardPrimaryMarketTrio,
   resolveSportsGamesCardCollapsedMarketType,
-} from '@/app/[locale]/(platform)/sports/_components/sports-games-data'
+  resolveSportsGamesCardVisibleMarketTypes,
+  resolveSportsGamesHeaderMarketTypes,
+} from '@/app/[locale]/(platform)/sports/_utils/sports-games-data'
 
 describe('sportsGamesCardLayout', () => {
   it('returns true only when moneyline, spread, and total are all present', () => {
@@ -45,5 +47,55 @@ describe('sportsGamesCardLayout', () => {
         { marketType: 'binary' },
       ] as any,
     })).toBe('moneyline')
+  })
+
+  it('derives visible market columns for full and collapsed cards', () => {
+    expect(resolveSportsGamesCardVisibleMarketTypes({
+      buttons: [
+        { marketType: 'moneyline' },
+        { marketType: 'spread' },
+        { marketType: 'total' },
+      ] as any,
+    }, true)).toEqual(['moneyline', 'spread', 'total'])
+
+    expect(resolveSportsGamesCardVisibleMarketTypes({
+      buttons: [
+        { marketType: 'total' },
+      ] as any,
+    }, true)).toEqual(['total'])
+  })
+
+  it('suppresses the desktop header when cards in a row expose different columns', () => {
+    expect(resolveSportsGamesHeaderMarketTypes([
+      {
+        event: { sports_ended: false },
+        buttons: [
+          { marketType: 'moneyline' },
+          { marketType: 'spread' },
+          { marketType: 'total' },
+        ],
+      },
+      {
+        event: { sports_ended: false },
+        buttons: [
+          { marketType: 'total' },
+        ],
+      },
+    ] as any, true)).toEqual([])
+
+    expect(resolveSportsGamesHeaderMarketTypes([
+      {
+        event: { sports_ended: false },
+        buttons: [
+          { marketType: 'total' },
+        ],
+      },
+      {
+        event: { sports_ended: false },
+        buttons: [
+          { marketType: 'total' },
+        ],
+      },
+    ] as any, true)).toEqual(['total'])
   })
 })
