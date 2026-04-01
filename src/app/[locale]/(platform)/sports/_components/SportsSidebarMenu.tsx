@@ -24,6 +24,7 @@ interface SportsSidebarMenuProps {
   mode: SportsSidebarMode
   activeTagSlug: string | null
   countByTagSlug?: Record<string, number>
+  independentScroll?: boolean
 }
 
 type SportsMenuChildLinkEntry = SportsMenuGroupEntry['links'][number]
@@ -563,6 +564,7 @@ export default function SportsSidebarMenu({
   mode,
   activeTagSlug,
   countByTagSlug,
+  independentScroll = false,
 }: SportsSidebarMenuProps) {
   const verticalConfig = getSportsVerticalConfig(vertical)
   const mobileQuickMenuContainerRef = useRef<HTMLDivElement | null>(null)
@@ -941,10 +943,18 @@ export default function SportsSidebarMenu({
 
       <aside
         data-sports-scroll-pane="sidebar"
-        className={`
-          hidden w-[190px] shrink-0 self-start
-          lg:sticky lg:top-22 lg:flex lg:max-h-[calc(100vh-5.5rem)] lg:flex-col lg:overflow-y-auto lg:py-2 lg:pr-1
-        `}
+        className={cn(
+          'hidden w-[190px] shrink-0',
+          independentScroll
+            ? `
+              lg:flex lg:h-full lg:min-h-0 lg:flex-col lg:justify-start lg:overflow-y-auto lg:overscroll-contain lg:pt-2
+              lg:pb-8
+            `
+            : `
+              lg:sticky lg:top-22 lg:flex lg:h-[calc(100vh-5.5rem)] lg:flex-col lg:justify-start lg:overflow-y-auto
+              lg:overscroll-contain lg:py-8
+            `,
+        )}
       >
         {renderDesktopMenuEntries()}
       </aside>
